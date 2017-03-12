@@ -6,17 +6,25 @@
 
 import collections
 import sys
+#import urllib.request
 import urllib.request
+import urllib3.filepost
 import json
 import youtube_dl
 
+from html import escape
+
 pad_base = 'https://etherpad.wikimedia.org/p' # etherpad base URL
 
+# markdown import doesn't really work in etherpad... let's use HTML
 md = ''
+html = ''
 i = 0
 
 semesters = collections.OrderedDict()
 semester = None
+
+do_import_pads = True
 
 
 with open('ucb_webcasts.json', 'r') as f:
@@ -27,9 +35,11 @@ with open('ucb_webcasts.json', 'r') as f:
         sem = course['semester'].replace(' ', '_')
         if sem not in semesters:
             semesters[sem] = ''
-            md = semesters[sem]
+            #md = semesters[sem]
+            html = semesters[sem]
             semester = sem
 
+        # most etherpads don't import H1/H2/... correctly
         #md += "# %s\n" % course['title']
         md += "**%s**\n\n" % course['title']
         md += "Department: %s\n\n" % course['dept']
@@ -38,38 +48,74 @@ with open('ucb_webcasts.json', 'r') as f:
         md += course['descr']
         md += '\n\n'
 
+        html += "<p><strong>%s</strong></p>\n" % escape(course['title'])
+        html += "<p>Department: %s</p>\n" % escape(course['dept'])
+        html += "<p>Semester: %s</p>\n" % escape(course['semester'])
+        html += "<p>Lecturer: %s</p>\n" % escape(course['lecturer'])
+        html += '<p><em>' + escape(course['descr']) + '</em></p>'
+        #html += '<br />\n'
+
 
         #print(course)
         if not 'playlist' in course:
             md += '*(no playlist)*\n\n'
+            html += "<p><em>(no playlist)</em></p>\n"
         else:
+            url = 'https://www.youtube.com/view_play_list?p=' + course['youTube']
             md += 'Playlist: https://www.youtube.com/view_play_list?p=' + course['youTube'] + '\n\n'
+            html += '<p>Playlist: <a href="%s">%s</a></p>\n' % (escape(url), url)
             for item in course['playlist']:
+                url = 'https://www.youtube.com/watch?v=%s' % item['url']
+                padurl = '%s/UCB_Webcasts_CC_%s' % (pad_base, item['url'])
                 #md += "## %s\n" % item['title']
                 md += "**_%s_**\n\n" % item['title']
-                md += 'URL: https://www.youtube.com/watch?v=%s\n\n' % item['url']
+                md += 'URL: %s\n\n' % url
                 md += 'Pad: %s/UCB_Webcasts_CC_%s\n\n' % (pad_base, item['url'])
                 md += 'Done: 0%\n\n'
                 md += 'Takers: \n\n'
                 md += '\n'
 
+                html += "<p><strong><em>%s</em></strong></p>\n" % escape(item['title'])
+                html += '<p>URL: <a href="%s">%s</a></p>\n' % (escape(url), url)
+                html += '<p>Pad: <a href="%s">%s</a></p>\n' % (escape(padurl), padurl)
+                html += '<p>Done: 0%</p>\n'
+                html += '<p>Takers: </p>\n'
+                html += '<br/>\n'
+
         md += '\n\n'
         md += '\n\n'
+        html += '<br/>\n'
+        html += '<br/>\n'
 
         # XXX: testing...
         i+=1
         #if i == 5:
         #    break;
-        semesters[semester] = md
+        #semesters[semester] = md
+        semesters[semester] = html
 
     #print(md)
 
-master = '# Semester pads:\n'
+master = '<p><strong>Semester pads:</strong></p>\n'
 for s in semesters:
-    md = semesters[s]
-    with open('pad_'+s+'.md', 'w') as o:
-        o.write(md)
-    master += 'Pad: %s/UCB_Webcasts_CC_%s\n\n' % (pad_base, s)
+    padurl = '%s/UCB_Webcasts_CC_%s' % (pad_base, s)
+    html = semesters[s]
+    #with open('pad_'+s+'.md', 'w') as o:
+    with open('pad_'+s+'.html', 'w') as o:
+        o.write(html)
+    master += '<p>Pad: <a href="%s">%s</a></p>\n' % (escape(padurl), padurl)
+    if (do_import_pads):
+        data = { 'importfileinput': html }
+        #data = urllib.urlencode(data)
+        data, content_type = urllib3.filepost.encode_multipart_formdata(data)
+        print('Importing pad to %s' % padurl)
+        req = urllib.request.Request(url=padurl + '/import', data=data, headers={'Content-Type': content_type})
+        print(req)
+        try:
+            with urllib.request.urlopen(req) as f:
+                print('Importing pad: %s' % f.getcode())
+        except Exception as err:
+            print(err)
 
-with open('master_pad.md', 'w') as o:
+with open('master_pad.html', 'w') as o:
     o.write(master)
