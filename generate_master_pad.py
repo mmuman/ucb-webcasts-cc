@@ -6,13 +6,18 @@
 
 import collections
 import sys
-#import urllib.request
 import urllib.request
 import urllib3.filepost
+import http.client
 import json
 import youtube_dl
 
 from html import escape
+
+#HttpHandler = urllib.request.HTTPHandler (debuglevel=1)
+#HttpsHandler = urllib.request.HTTPSHandler (debuglevel=1)
+#opener = urllib.request.build_opener (HttpsHandler)
+#urllib.request.install_opener (opener)
 
 pad_base = 'https://etherpad.wikimedia.org/p' # etherpad base URL
 
@@ -24,7 +29,7 @@ i = 0
 semesters = collections.OrderedDict()
 semester = None
 
-do_import_pads = True
+do_import_pads = False
 
 
 with open('ucb_webcasts.json', 'r') as f:
@@ -78,6 +83,7 @@ with open('ucb_webcasts.json', 'r') as f:
                 html += "<p><strong><em>%s</em></strong></p>\n" % escape(item['title'])
                 html += '<p>URL: <a href="%s">%s</a></p>\n' % (escape(url), url)
                 html += '<p>Pad: <a href="%s">%s</a></p>\n' % (escape(padurl), padurl)
+                html += '<p>Status: unknown</p>\n'
                 html += '<p>Done: 0%</p>\n'
                 html += '<p>Takers: </p>\n'
                 html += '<br/>\n'
@@ -99,21 +105,29 @@ with open('ucb_webcasts.json', 'r') as f:
 master = '<p><strong>Semester pads:</strong></p>\n'
 for s in semesters:
     padurl = '%s/UCB_Webcasts_CC_%s' % (pad_base, s)
-    html = semesters[s]
+    html = '<!doctype html>\n<html lang="en">\n<head>\n<title>UCB_Webcasts_CC_%s</title>\n</head>\n<body>\n' % s
+    html += semesters[s]
+    html += '</body>\n</html>\n'
     #with open('pad_'+s+'.md', 'w') as o:
     with open('pad_'+s+'.html', 'w') as o:
         o.write(html)
     master += '<p>Pad: <a href="%s">%s</a></p>\n' % (escape(padurl), padurl)
     if (do_import_pads):
-        data = { 'importfileinput': html }
+        data = { 'file': ('pad_'+s+'.html', html, 'text/html') }
         #data = urllib.urlencode(data)
         data, content_type = urllib3.filepost.encode_multipart_formdata(data)
+        #print(data)
+        #print(content_type)
         print('Importing pad to %s' % padurl)
         req = urllib.request.Request(url=padurl + '/import', data=data, headers={'Content-Type': content_type})
-        print(req)
+        #print(req.get_method())
+        #print(vars(req))
         try:
             with urllib.request.urlopen(req) as f:
                 print('Importing pad: %s' % f.getcode())
+                #print(f.info())
+                #print(f.read())
+                #print(vars(f))
         except Exception as err:
             print(err)
 
