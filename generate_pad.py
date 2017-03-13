@@ -31,10 +31,11 @@ do_import_pads = False
 do_import_all = False
 do_import_semester = None
 do_import = []
+# TODO: add a "continue from ID" arg
 # TODO:
 # start again at
 # Computer Science 61C
-# OrrIbXqfu4U
+# yt ID: OrrIbXqfu4U
 
 if ('-a' in sys.argv):
     do_import_all = True
